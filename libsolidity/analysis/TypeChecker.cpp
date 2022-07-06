@@ -1729,15 +1729,33 @@ bool TypeChecker::visit(UnaryOperation const& _operation)
 		requireLValue(_operation.subExpression(), false);
 	else
 		_operation.subExpression().accept(*this);
-	Type const* subExprType = type(_operation.subExpression());
-	TypeResult result = type(_operation.subExpression())->unaryOperatorResult(op);
-	if (!result)
+	Type const* operandType = type(_operation.subExpression());
+
+	// Check if the operator is built-in or user-defined.
+	TypeResult builtinResult = operandType->unaryOperatorResult(op);
+	Result<FunctionDefinition const*> userDefinedOperatorResult = operandType->operatorDefinition(
+		_operation.getOperator(),
+		*currentDefinitionScope(),
+		true // _unary
+	);
+
+	if (userDefinedOperatorResult)
+		_operation.annotation().userDefinedFunction = userDefinedOperatorResult;
+	// Operator can't be both user-defined and built-in at the same time.
+	solAssert(!builtinResult || !userDefinedOperatorResult);
+
+	if (userDefinedOperatorResult)
+		_operation.annotation().type = operandType;
+	else if (builtinResult)
+		_operation.annotation().type = builtinResult;
+	else
 	{
 		string description = fmt::format(
-			"Built-in unary operator {} cannot be applied to type {}.{}",
+			"Built-in unary operator {} cannot be applied to type {}.{}{}",
 			TokenTraits::toString(op),
-			subExprType->humanReadableName(),
-			!result.message().empty() ? " " + result.message() : ""
+			operandType->humanReadableName(),
+			!builtinResult.message().empty() ? " " + builtinResult.message() : "",
+			!userDefinedOperatorResult.message().empty() ? " " + userDefinedOperatorResult.message() : ""
 		);
 
 		if (modifying)
@@ -1746,14 +1764,14 @@ bool TypeChecker::visit(UnaryOperation const& _operation)
 			m_errorReporter.fatalTypeError(9767_error, _operation.location(), description);
 		else
 			m_errorReporter.typeError(4907_error, _operation.location(), description);
-		_operation.annotation().type = subExprType;
+		_operation.annotation().type = operandType;
 	}
-	else
-		_operation.annotation().type = result.get();
+
 	_operation.annotation().isConstant = false;
 	_operation.annotation().isPure =
 		!modifying &&
-		*_operation.subExpression().annotation().isPure;
+		*_operation.subExpression().annotation().isPure &&
+		(!_operation.userDefinedFunctionType() || _operation.userDefinedFunctionType()->isPure());
 	_operation.annotation().isLValue = false;
 
 	return false;
@@ -1763,33 +1781,80 @@ void TypeChecker::endVisit(BinaryOperation const& _operation)
 {
 	Type const* leftType = type(_operation.leftExpression());
 	Type const* rightType = type(_operation.rightExpression());
-	TypeResult result = leftType->binaryOperatorResult(_operation.getOperator(), rightType);
-	Type const* commonType = result.get();
-	if (!commonType)
+	_operation.annotation().isLValue = false;
+	_operation.annotation().isConstant = false;
+
+	// Check if the operator is built-in or user-defined.
+	TypeResult builtinResult = leftType->binaryOperatorResult(_operation.getOperator(), rightType);
+	Result<FunctionDefinition const*> operatorDefinitionResult = leftType->operatorDefinition(
+		_operation.getOperator(),
+		*currentDefinitionScope(),
+		false // _unary
+	);
+	if (operatorDefinitionResult)
+		_operation.annotation().userDefinedFunction = operatorDefinitionResult;
+	FunctionType const* userDefinedFunctionType = _operation.userDefinedFunctionType();
+	_operation.annotation().isPure =
+		*_operation.leftExpression().annotation().isPure &&
+		*_operation.rightExpression().annotation().isPure &&
+		(!userDefinedFunctionType || userDefinedFunctionType->isPure());
+
+	// Operator can't be both user-defined and built-in at the same time.
+	solAssert(!builtinResult || !operatorDefinitionResult);
+
+	Type const* commonType = leftType;
+	if (builtinResult)
+		commonType = builtinResult.get();
+	else if (operatorDefinitionResult)
 	{
+		Type const* normalizedParameterType = userDefinedFunctionType->parameterTypes().at(0);
+		Type const* normalizedLeftType = leftType;
+		Type const* normalizedRightType = rightType;
+
+		if (auto const* parameterReference = dynamic_cast<ReferenceType const*>(normalizedParameterType))
+			normalizedParameterType = TypeProvider::withLocationIfReference(parameterReference->location(), normalizedParameterType);
+		if (auto const* leftReferenceType = dynamic_cast<ReferenceType const*>(normalizedLeftType))
+			normalizedLeftType = TypeProvider::withLocationIfReference(leftReferenceType->location(), normalizedLeftType);
+		if (auto const* rightReferenceType = dynamic_cast<ReferenceType const*>(normalizedRightType))
+			normalizedRightType = TypeProvider::withLocationIfReference(rightReferenceType->location(), normalizedRightType);
+
+		if (
+			userDefinedFunctionType->parameterTypes().size() != 2 ||
+			*normalizedLeftType != *normalizedParameterType ||
+			*normalizedRightType != *normalizedParameterType
+		)
+			m_errorReporter.typeError(
+				5653_error,
+				_operation.location(),
+				fmt::format(
+					"User defined binary operator {} not compatible with types {} and {}.",
+					string(TokenTraits::toString(_operation.getOperator())),
+					leftType->humanReadableName(),
+					rightType->humanReadableName()
+				)
+			);
+		else if (userDefinedFunctionType->returnParameterTypes().size() == 1)
+			commonType = userDefinedFunctionType->parameterTypes().at(0);
+	}
+	else
 		m_errorReporter.typeError(
 			2271_error,
 			_operation.location(),
-			"Built-in binary operator " +
-			string(TokenTraits::toString(_operation.getOperator())) +
-			" cannot be applied to types " +
-			leftType->humanReadableName() +
-			" and " +
-			rightType->humanReadableName() + "." +
-			(!result.message().empty() ? " " + result.message() : "")
+			fmt::format(
+				"Built-in binary operator {} cannot be applied to types {} and {}.{}{}",
+				string(TokenTraits::toString(_operation.getOperator())),
+				leftType->humanReadableName(),
+				rightType->humanReadableName(),
+				(!builtinResult.message().empty() ? " " + builtinResult.message() : ""),
+				(!operatorDefinitionResult.message().empty() ? " " + operatorDefinitionResult.message() : "")
+			)
 		);
-		commonType = leftType;
-	}
+
 	_operation.annotation().commonType = commonType;
 	_operation.annotation().type =
 		TokenTraits::isCompareOp(_operation.getOperator()) ?
 		TypeProvider::boolean() :
 		commonType;
-	_operation.annotation().isPure =
-		*_operation.leftExpression().annotation().isPure &&
-		*_operation.rightExpression().annotation().isPure;
-	_operation.annotation().isLValue = false;
-	_operation.annotation().isConstant = false;
 
 	if (_operation.getOperator() == Token::Exp || _operation.getOperator() == Token::SHL)
 	{
@@ -1814,14 +1879,14 @@ void TypeChecker::endVisit(BinaryOperation const& _operation)
 			m_errorReporter.warning(
 				3149_error,
 				_operation.location(),
-				"The result type of the " +
-				operation +
-				" operation is equal to the type of the first operand (" +
-				commonType->humanReadableName() +
-				") ignoring the (larger) type of the second operand (" +
-				rightType->humanReadableName() +
-				") which might be unexpected. Silence this warning by either converting "
-				"the first or the second operand to the type of the other."
+				fmt::format(
+					"The result type of the {} operation is equal to the type of the first operand ({}) "
+					"ignoring the (larger) type of the second operand ({}) which might be unexpected. "
+					"Silence this warning by either converting the first or the second operand to the type of the other.",
+					operation,
+					commonType->humanReadableName(),
+					rightType->humanReadableName()
+				)
 			);
 	}
 }
@@ -3791,13 +3856,20 @@ void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 	Type const* usingForType = _usingFor.typeName()->annotation().type;
 	solAssert(usingForType);
 
+	if (usingForType->category() == Type::Category::Enum)
+		m_errorReporter.typeError(
+			9921_error,
+			_usingFor.location(),
+			"The \"using\" directive cannot be used to bind function to enum type as an operator."
+		);
+
 	Type const* normalizedType = TypeProvider::withLocationIfReference(
 		DataLocation::Storage,
 		usingForType
 	);
 	solAssert(normalizedType);
 
-	for (ASTPointer<IdentifierPath> const& path: _usingFor.functionsOrLibrary())
+	for (auto const& [path, operator_]: _usingFor.functionsAndOperators())
 	{
 		solAssert(path->annotation().referencedDeclaration);
 		FunctionDefinition const& functionDefinition =
@@ -3821,7 +3893,7 @@ void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 		BoolResult result = normalizedType->isImplicitlyConvertibleTo(
 			*TypeProvider::withLocationIfReference(DataLocation::Storage, functionType->selfType())
 		);
-		if (!result)
+		if (!result && !operator_)
 			m_errorReporter.typeError(
 				3100_error,
 				path->location(),
@@ -3834,6 +3906,142 @@ void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 					result.message().empty() ? "." : ": " +  result.message()
 				)
 			);
+		else if (operator_)
+		{
+			TypePointers const& parameterTypes = functionType->parameterTypesIncludingSelf();
+			size_t const parameterCount = parameterTypes.size();
+			if (!usingForType->typeDefinition())
+			{
+				m_errorReporter.typeError(
+					5332_error,
+					path->location(),
+					"Operators can only be implemented for user-defined value types and structs."
+				);
+				continue;
+			}
+
+			if (
+				(
+					(TokenTraits::isBinaryOp(*operator_) && !TokenTraits::isUnaryOp(*operator_)) ||
+					*operator_ == Token::Add ||
+					TokenTraits::isCompareOp(*operator_)
+				) &&
+				(
+					parameterCount != 2 ||
+					*parameterTypes.at(0) !=
+					*parameterTypes.at(1)
+				)
+			)
+				m_errorReporter.typeError(
+					1884_error,
+					path->location(),
+					fmt::format(
+						"The function \"{}\" needs to have two parameters of type {} and the same "
+						"data location to be used for the operator {}.",
+						joinHumanReadable(path->path(), "."),
+						usingForType->canonicalName(),
+						TokenTraits::friendlyName(*operator_)
+					)
+				);
+			else if (
+				!TokenTraits::isBinaryOp(*operator_) &&
+				TokenTraits::isUnaryOp(*operator_) &&
+				(
+					parameterCount != 1 ||
+					(
+						*TypeProvider::withLocationIfReference(DataLocation::Storage, parameterTypes.front()) !=
+						*TypeProvider::withLocationIfReference(DataLocation::Storage, usingForType)
+					)
+				)
+			)
+				m_errorReporter.typeError(
+					1147_error,
+					path->location(),
+					fmt::format(
+					"The function \"{}\" needs to have exactly one parameter of type {} to be used for the operator {}.",
+						joinHumanReadable(path->path(), "."),
+						usingForType->canonicalName(),
+						TokenTraits::friendlyName(*operator_)
+					)
+				);
+			else if (
+				(
+					parameterCount == 2 &&
+					(
+						(*parameterTypes.at(0) != *parameterTypes.at(1)) ||
+						(
+							*TypeProvider::withLocationIfReference(DataLocation::Storage, parameterTypes.at(0)) !=
+							*TypeProvider::withLocationIfReference(DataLocation::Storage, usingForType)
+						)
+					)
+				) ||
+				(
+					parameterCount == 1 &&
+					(
+						*TypeProvider::withLocationIfReference(DataLocation::Storage, parameterTypes.at(0)) !=
+						*TypeProvider::withLocationIfReference(DataLocation::Storage, usingForType)
+					)
+				) ||
+				(
+					parameterCount != 1 && parameterCount != 2
+				)
+			)
+				m_errorReporter.typeError(
+					7617_error,
+					path->location(),
+					fmt::format(
+						"The function \"{}\" needs to have one or two parameters of type {} "
+						"and the same data location to be used for the operator {}.",
+						joinHumanReadable(path->path(), "."),
+						usingForType->canonicalName(),
+						TokenTraits::friendlyName(*operator_)
+					)
+				);
+
+			TypePointers const& returnParameterTypes = functionType->returnParameterTypes();
+			size_t const returnParameterCount = returnParameterTypes.size();
+			if (!TokenTraits::isCompareOp(*operator_))
+			{
+				if (
+					returnParameterCount != 1 ||
+					(
+						*TypeProvider::withLocationIfReference(DataLocation::Storage, returnParameterTypes.front()) !=
+						*TypeProvider::withLocationIfReference(DataLocation::Storage, usingForType)
+					)
+				)
+					m_errorReporter.typeError(
+						7743_error,
+						path->location(),
+						fmt::format(
+							"The function \"{}\" needs to return exactly one value of type {} to be used for the operator {}.",
+							joinHumanReadable(path->path(), "."),
+							usingForType->canonicalName(),
+							TokenTraits::friendlyName(*operator_)
+						)
+					);
+				else if (*returnParameterTypes.front() != *parameterTypes.front())
+					m_errorReporter.typeError(
+						3605_error,
+						path->location(),
+						fmt::format(
+							"The function \"{}\" needs to have parameters and return value "
+							"of the same type to be used for the operator {}.",
+							joinHumanReadable(path->path(), "."),
+							TokenTraits::friendlyName(*operator_)
+						)
+					);
+			}
+			else if (returnParameterCount != 1 || *returnParameterTypes.front() != *TypeProvider::boolean())
+				m_errorReporter.typeError(
+					7995_error,
+					path->location(),
+					fmt::format(
+						"The function \"{}\" needs to return exactly one value of type bool to be used for the operator {}.",
+						joinHumanReadable(path->path(), "."),
+						TokenTraits::friendlyName(*operator_)
+					)
+				);
+		}
 	}
 }
 

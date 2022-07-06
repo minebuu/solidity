@@ -25,6 +25,7 @@
 
 #include <libsolidity/ast/AST.h>
 #include <libsolidity/ast/TypeProvider.h>
+#include <libsolidity/ast/OverridableOperators.h>
 
 #include <libsolidity/analysis/ConstantEvaluator.h>
 
@@ -58,6 +59,8 @@ using namespace std;
 using namespace solidity;
 using namespace solidity::langutil;
 using namespace solidity::frontend;
+
+using util::Result;
 
 namespace
 {
@@ -403,6 +406,50 @@ vector<UsingForDirective const*> usingForDirectivesForType(Type const& _type, AS
 
 }
 
+Result<FunctionDefinition const*> Type::operatorDefinition(Token _token, ASTNode const& _scope, bool _unary) const
+{
+	if (!typeDefinition() || !util::contains(overridableOperators, _token))
+		return nullptr;
+
+	set<FunctionDefinition const*> matchingDefinitions;
+	for (UsingForDirective const* directive: usingForDirectivesForType(*this, _scope))
+		for (auto const& [identifierPath, operator_]: directive->functionsAndOperators())
+		{
+			if (operator_ != _token)
+				continue;
+
+			auto const& functionDefinition = dynamic_cast<FunctionDefinition const&>(
+				*identifierPath->annotation().referencedDeclaration
+			);
+			auto const* functionType = dynamic_cast<FunctionType const*>(
+				functionDefinition.libraryFunction() ? functionDefinition.typeViaContractName() : functionDefinition.type()
+			);
+			solAssert(functionType && !functionType->parameterTypes().empty());
+
+			Type const* normalizedType = this;
+			if (auto const* referenceType = dynamic_cast<ReferenceType const*>(normalizedType))
+				normalizedType = TypeProvider::withLocationIfReference(referenceType->location(), normalizedType);
+
+			Type const* normalizedFirstParameterType = functionType->parameterTypes().front();
+			if (auto const* referenceType = dynamic_cast<ReferenceType const*>(normalizedFirstParameterType))
+				normalizedFirstParameterType = TypeProvider::withLocationIfReference(referenceType->location(), normalizedFirstParameterType);
+
+			size_t parameterCount = functionDefinition.parameterList().parameters().size();
+			if (
+				*normalizedType == *normalizedFirstParameterType &&
+				(_unary ? parameterCount == 1 : parameterCount == 2)
+			)
+				matchingDefinitions.insert(&functionDefinition);
+		}
+
+	if (matchingDefinitions.size() == 1)
+		return *matchingDefinitions.begin();
+	else if (matchingDefinitions.size() == 0)
+		return Result<FunctionDefinition const*>::err("No matching user-defined operator found.");
+	else
+		return Result<FunctionDefinition const*>::err("Multiple user-defined functions provided for this operator.");
+}
+
 MemberList::MemberMap Type::attachedFunctions(Type const& _type, ASTNode const& _scope)
 {
 	MemberList::MemberMap members;
@@ -425,8 +472,13 @@ MemberList::MemberMap Type::attachedFunctions(Type const& _type, ASTNode const& 
 	};
 
 	for (UsingForDirective const* ufd: usingForDirectivesForType(_type, _scope))
-		for (auto const& identifierPath: ufd->functionsOrLibrary())
+		for (auto const& [identifierPath, operator_]: ufd->functionsAndOperators())
 		{
+			if (operator_.has_value())
+				// Functions used to define operators are not attached to the type.
+				// I.e. `using {f} for T` allows `T x; x.f()` but `using {f as +} for T` does not.
+				continue;
+
 			solAssert(identifierPath);
 			Declaration const* declaration = identifierPath->annotation().referencedDeclaration;
 			solAssert(declaration);
