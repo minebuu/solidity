@@ -1,12 +1,14 @@
 ### 0.8.18 (unreleased)
 
 Language Features:
+ * Allow defining custom operators for user-defined value types and structs via ``using {f as +} for Typename;`` syntax.
 
 
 Compiler Features:
  * Commandline Interface: Return exit code ``2`` on uncaught exceptions.
  * Commandline Interface: Add `--no-cbor-metadata` that skips CBOR metadata from getting appended at the end of the bytecode.
  * EVM: Basic support for the EVM version "Paris".
+ * JSON AST: Add ``function`` field to ``UnaryOperation`` and ``BinaryOperation`` AST nodes and ``functionList.operator`` field to ``UsingForDirective`` AST nodes.
  * Natspec: Add event Natspec inheritance for devdoc.
  * Standard JSON: Add a boolean field `settings.metadata.appendCBOR` that skips CBOR metadata from getting appended at the end of the bytecode.
  * Yul EVM Code Transform: Generate more optimal code for user-defined functions that always terminate a transaction. No return labels will be pushed for calls to functions that always terminate.
