@@ -3767,6 +3767,7 @@ void TypeChecker::endVisit(Literal const& _literal)
 		{
 			solAssert(!suffixFunctionType->takesArbitraryParameters());
 			solAssert(suffixFunctionType->kind() == FunctionType::Kind::Internal);
+			solAssert(!_literal.suffixFunction()->virtualSemantics());
 
 			auto const* literalRationalType = dynamic_cast<RationalNumberType const*>(type);
 
