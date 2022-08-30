@@ -329,7 +329,7 @@ Compiler Features:
 
 Bugfixes:
  * Code Generator: Fix crash when passing an empty string literal to ``bytes.concat()``.
- * Code Generator: Fix internal compiler error when calling functions bound to calldata structs and arrays.
+ * Code Generator: Fix internal compiler error when calling functions attached to calldata structs and arrays.
  * Code Generator: Fix internal compiler error when passing a 32-byte hex literal or a zero literal to ``bytes.concat()`` by disallowing such literals.
  * Commandline Interface: Apply ``--optimizer-runs`` option in assembly / yul mode.
  * Commandline Interface: Fix crash when a directory path is passed to ``--standard-json``.
@@ -898,7 +898,7 @@ Bugfixes:
  * SMTChecker: Fix internal error when encoding tuples of tuples.
  * SMTChecker: Fix aliasing soundness after pushing to an array pointer.
  * Type system: Fix internal compiler error on calling externally a function that returns variables with calldata location.
- * Type system: Fix bug where a bound function was not found if ``using for`` is applied to explicit reference types.
+ * Type system: Fix bug where an attached function was not found if ``using for`` is applied to explicit reference types.
 
 
 ### 0.6.9 (2020-06-04)
@@ -1586,7 +1586,7 @@ Compiler Features:
  * SMTChecker: SMTLib2 queries and responses passed via standard JSON compiler interface.
  * SMTChecker: Support ``msg``, ``tx`` and ``block`` member variables.
  * SMTChecker: Support ``gasleft()`` and ``blockhash()`` functions.
- * SMTChecker: Support internal bound function calls.
+ * SMTChecker: Support internal calls to attached functions.
  * Yul: Support Yul objects in ``--assemble``, ``--strict-assembly`` and ``--yul`` commandline options.
 
 Bugfixes:
@@ -2259,7 +2259,7 @@ Features:
 Bugfixes:
  * Commandline interface: Disallow unknown options in ``solc``.
  * Name resolver: Allow inheritance of ``enum`` definitions.
- * Type checker: Proper type checking for bound functions.
+ * Type checker: Proper type checking for attached functions.
  * Type checker: fixed crash related to invalid fixed point constants
  * Type checker: fixed crash related to invalid literal numbers.
  * Type checker: ``super.x`` does not look up ``x`` in the current contract.
@@ -2444,7 +2444,7 @@ Bugfixes:
  * **Breaking Change**: `new ContractName.value(10)()` has to be written as `(new ContractName).value(10)()`
  * Added `selfdestruct` as an alias for `suicide`.
  * Allocation of memory arrays using `new`.
- * Binding library functions to types via `using x for y`
+ * Attaching library functions to types via `using x for y`
  * `addmod` and `mulmod` (modular addition and modular multiplication with arbitrary intermediate precision)
  * Bugfix: Constructor arguments of fixed array type were not read correctly.
  * Bugfix: Memory allocation of structs containing arrays or strings.
