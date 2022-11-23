@@ -1807,22 +1807,10 @@ void TypeChecker::endVisit(BinaryOperation const& _operation)
 		commonType = builtinResult.get();
 	else if (operatorDefinitionResult)
 	{
-		Type const* normalizedParameterType = userDefinedFunctionType->parameterTypes().at(0);
-		Type const* normalizedLeftType = leftType;
-		Type const* normalizedRightType = rightType;
-
-		if (auto const* parameterReference = dynamic_cast<ReferenceType const*>(normalizedParameterType))
-			normalizedParameterType = TypeProvider::withLocationIfReference(parameterReference->location(), normalizedParameterType);
-		if (auto const* leftReferenceType = dynamic_cast<ReferenceType const*>(normalizedLeftType))
-			normalizedLeftType = TypeProvider::withLocationIfReference(leftReferenceType->location(), normalizedLeftType);
-		if (auto const* rightReferenceType = dynamic_cast<ReferenceType const*>(normalizedRightType))
-			normalizedRightType = TypeProvider::withLocationIfReference(rightReferenceType->location(), normalizedRightType);
-
 		// operatorDefinitions() filters out definitions with non-matching first argument.
-		solAssert(*normalizedLeftType == *normalizedParameterType);
+		solAssert(leftType->sameTypeOrPointerTo(*userDefinedFunctionType->parameterTypes().at(0)));
 		solAssert(userDefinedFunctionType->parameterTypes().size() == 2);
-
-		if (*normalizedRightType != *normalizedParameterType)
+		if (!rightType->sameTypeOrPointerTo(*userDefinedFunctionType->parameterTypes().at(0)))
 			m_errorReporter.typeError(
 				5653_error,
 				_operation.location(),
@@ -3920,51 +3908,22 @@ void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 				continue;
 			}
 
+			bool identicalFirstTwoParameters = (parameterCount < 2 || *parameterTypes.at(0) == *parameterTypes.at(1));
+			bool isUnaryOnlyOperator = (!TokenTraits::isBinaryOp(*operator_) && TokenTraits::isUnaryOp(*operator_));
+			bool isBinaryOnlyOperator =
+				(TokenTraits::isBinaryOp(*operator_) && !TokenTraits::isUnaryOp(*operator_)) ||
+				*operator_ == Token::Add;
+
+			bool firstParameterMatchesUsingFor =
+				parameterCount == 0 ||
+				usingForType->sameTypeOrPointerTo(*parameterTypes.front(), true /* _excludeLocation */);
+
 			optional<string> wrongParametersMessage;
-			if (
-				(
-					(TokenTraits::isBinaryOp(*operator_) && !TokenTraits::isUnaryOp(*operator_)) ||
-					*operator_ == Token::Add
-				) &&
-				(
-					parameterCount != 2 ||
-					*parameterTypes.at(0) !=
-					*parameterTypes.at(1)
-				)
-			)
+			if (isBinaryOnlyOperator && (parameterCount != 2 || !identicalFirstTwoParameters))
 				wrongParametersMessage = fmt::format("two parameters of type {} and the same data location", usingForType->canonicalName());
-			else if (
-				!TokenTraits::isBinaryOp(*operator_) &&
-				TokenTraits::isUnaryOp(*operator_) &&
-				(
-					parameterCount != 1 ||
-					(
-						*TypeProvider::withLocationIfReference(DataLocation::Storage, parameterTypes.front()) !=
-						*TypeProvider::withLocationIfReference(DataLocation::Storage, usingForType)
-					)
-				)
-			)
+			else if (isUnaryOnlyOperator && (parameterCount != 1 || !firstParameterMatchesUsingFor))
 				wrongParametersMessage = fmt::format("exactly one parameter of type {}", usingForType->canonicalName());
-			else if (
-				(
-					parameterCount == 2 &&
-					(
-						(*parameterTypes.at(0) != *parameterTypes.at(1)) ||
-						(
-							*TypeProvider::withLocationIfReference(DataLocation::Storage, parameterTypes.at(0)) !=
-							*TypeProvider::withLocationIfReference(DataLocation::Storage, usingForType)
-						)
-					)
-				) ||
-				(
-					parameterCount == 1 &&
-					(
-						*TypeProvider::withLocationIfReference(DataLocation::Storage, parameterTypes.at(0)) !=
-						*TypeProvider::withLocationIfReference(DataLocation::Storage, usingForType)
-					)
-				) ||
-				parameterCount >= 3
-			)
+			else if (parameterCount >= 3 || !firstParameterMatchesUsingFor || !identicalFirstTwoParameters)
 				wrongParametersMessage = fmt::format("one or two parameters of type {} and the same data location", usingForType->canonicalName());
 
 			if (wrongParametersMessage.has_value())
@@ -3991,10 +3950,7 @@ void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 			{
 				if (
 					returnParameterCount != 1 ||
-					(
-						*TypeProvider::withLocationIfReference(DataLocation::Storage, returnParameterTypes.front()) !=
-						*TypeProvider::withLocationIfReference(DataLocation::Storage, usingForType)
-					)
+					!usingForType->sameTypeOrPointerTo(*returnParameterTypes.front(), true /* _excludeLocation */)
 				)
 					wrongReturnParametersMessage = "exactly one value of type " + usingForType->canonicalName();
 				else if (*returnParameterTypes.front() != *parameterTypes.front())
