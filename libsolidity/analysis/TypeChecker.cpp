@@ -1818,11 +1818,11 @@ void TypeChecker::endVisit(BinaryOperation const& _operation)
 		if (auto const* rightReferenceType = dynamic_cast<ReferenceType const*>(normalizedRightType))
 			normalizedRightType = TypeProvider::withLocationIfReference(rightReferenceType->location(), normalizedRightType);
 
-		if (
-			userDefinedFunctionType->parameterTypes().size() != 2 ||
-			*normalizedLeftType != *normalizedParameterType ||
-			*normalizedRightType != *normalizedParameterType
-		)
+		// operatorDefinitions() filters out definitions with non-matching first argument.
+		solAssert(*normalizedLeftType == *normalizedParameterType);
+		solAssert(userDefinedFunctionType->parameterTypes().size() == 2);
+
+		if (*normalizedRightType != *normalizedParameterType)
 			m_errorReporter.typeError(
 				5653_error,
 				_operation.location(),
@@ -1833,8 +1833,8 @@ void TypeChecker::endVisit(BinaryOperation const& _operation)
 					userDefinedFunctionType->parameterTypes().at(0)->humanReadableName()
 				)
 			);
-		else if (userDefinedFunctionType->returnParameterTypes().size() == 1)
-			commonType = userDefinedFunctionType->parameterTypes().at(0);
+
+		commonType = userDefinedFunctionType->parameterTypes().at(0);
 	}
 	else
 		m_errorReporter.typeError(
@@ -3923,8 +3923,7 @@ void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 			if (
 				(
 					(TokenTraits::isBinaryOp(*operator_) && !TokenTraits::isUnaryOp(*operator_)) ||
-					*operator_ == Token::Add ||
-					TokenTraits::isCompareOp(*operator_)
+					*operator_ == Token::Add
 				) &&
 				(
 					parameterCount != 2 ||
@@ -3982,9 +3981,7 @@ void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 						*TypeProvider::withLocationIfReference(DataLocation::Storage, usingForType)
 					)
 				) ||
-				(
-					parameterCount != 1 && parameterCount != 2
-				)
+				parameterCount >= 3
 			)
 				m_errorReporter.typeError(
 					7617_error,
@@ -3997,6 +3994,9 @@ void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 						TokenTraits::friendlyName(*operator_)
 					)
 				);
+
+			// This case is separately validated for all bound functions and is a fatal error
+			solAssert(parameterCount != 0);
 
 			TypePointers const& returnParameterTypes = functionType->returnParameterTypes();
 			size_t const returnParameterCount = returnParameterTypes.size();
