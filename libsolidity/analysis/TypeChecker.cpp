@@ -1827,10 +1827,10 @@ void TypeChecker::endVisit(BinaryOperation const& _operation)
 				5653_error,
 				_operation.location(),
 				fmt::format(
-					"User defined binary operator {} not compatible with types {} and {}.",
+					"The type of the second operand of this user-defined binary operator {} "
+					"does not match the type of the first operand, which is {}.",
 					string(TokenTraits::toString(_operation.getOperator())),
-					leftType->humanReadableName(),
-					rightType->humanReadableName()
+					userDefinedFunctionType->parameterTypes().at(0)->humanReadableName()
 				)
 			);
 		else if (userDefinedFunctionType->returnParameterTypes().size() == 1)
