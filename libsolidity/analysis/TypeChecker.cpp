@@ -1764,22 +1764,50 @@ bool TypeChecker::visit(UnaryOperation const& _operation)
 	}
 	else
 	{
-		string description = fmt::format(
-			"Built-in unary operator {} cannot be applied to type {}.",
-			TokenTraits::toString(op),
-			operandType->humanReadableName()
+		set<FunctionDefinition const*> definitionsWithDifferentLocation = operandType->operatorDefinitions(
+			_operation.getOperator(),
+			*currentDefinitionScope(),
+			true, // _unary
+			true  // _anyDataLocation
 		);
-		if (!builtinResult.message().empty())
-			description += " " + builtinResult.message();
-		if (operandType->typeDefinition() && util::contains(overridableOperators, op))
-			description += " No matching user-defined operator found.";
 
-		if (modifying)
-			// Cannot just report the error, ignore the unary operator, and continue,
-			// because the sub-expression was already processed with requireLValue()
-			m_errorReporter.fatalTypeError(9767_error, _operation.location(), description);
+		if (!definitionsWithDifferentLocation.empty())
+		{
+			auto const* referenceType = dynamic_cast<ReferenceType const*>(operandType);
+			solAssert(referenceType);
+			solAssert(!modifying);
+
+			m_errorReporter.typeError(
+				5652_error,
+				_operation.location(),
+				fmt::format(
+					"User-defined unary operator {} cannot be applied to type {}. "
+					"None of the available definitions accepts {} arguments.",
+					TokenTraits::toString(op),
+					operandType->humanReadableName(),
+					referenceType->stringForReferencePart(false /* _showIndirection */)
+				)
+			);
+		}
 		else
-			m_errorReporter.typeError(4907_error, _operation.location(), description);
+		{
+			string description = fmt::format(
+				"Built-in unary operator {} cannot be applied to type {}.",
+				TokenTraits::toString(op),
+				operandType->humanReadableName()
+			);
+			if (!builtinResult.message().empty())
+				description += " " + builtinResult.message();
+			if (operandType->typeDefinition() && util::contains(overridableOperators, op))
+				description += " No matching user-defined operator found.";
+
+			if (modifying)
+				// Cannot just report the error, ignore the unary operator, and continue,
+				// because the sub-expression was already processed with requireLValue()
+				m_errorReporter.fatalTypeError(9767_error, _operation.location(), description);
+			else
+				m_errorReporter.typeError(4907_error, _operation.location(), description);
+		}
 		_operation.annotation().type = operandType;
 	}
 
@@ -1851,18 +1879,45 @@ void TypeChecker::endVisit(BinaryOperation const& _operation)
 	}
 	else
 	{
-		string description = fmt::format(
-			"Built-in binary operator {} cannot be applied to types {} and {}.",
-			string(TokenTraits::toString(_operation.getOperator())),
-			leftType->humanReadableName(),
-			rightType->humanReadableName()
+		set<FunctionDefinition const*> definitionsWithDifferentLocation = leftType->operatorDefinitions(
+			_operation.getOperator(),
+			*currentDefinitionScope(),
+			false, // _unary
+			true   // _anyDataLocation
 		);
-		if (!builtinResult.message().empty())
-			description += " " + builtinResult.message();
-		if (leftType->typeDefinition() && util::contains(overridableOperators, _operation.getOperator()))
-			description += " No matching user-defined operator found.";
 
-		m_errorReporter.typeError(2271_error, _operation.location(), description);
+		if (!definitionsWithDifferentLocation.empty())
+		{
+			auto const* referenceType = dynamic_cast<ReferenceType const*>(leftType);
+			solAssert(referenceType);
+
+			m_errorReporter.typeError(
+				1349_error,
+				_operation.location(),
+				fmt::format(
+					"User-defined binary operator {} cannot be applied to type {}. "
+					"None of the available definitions accepts {} arguments.",
+					TokenTraits::toString(_operation.getOperator()),
+					leftType->humanReadableName(),
+					referenceType->stringForReferencePart(false /* _showIndirection */)
+				)
+			);
+		}
+		else
+		{
+			string description = fmt::format(
+				"Built-in binary operator {} cannot be applied to types {} and {}.",
+				string(TokenTraits::toString(_operation.getOperator())),
+				leftType->humanReadableName(),
+				rightType->humanReadableName()
+			);
+			if (!builtinResult.message().empty())
+				description += " " + builtinResult.message();
+			if (leftType->typeDefinition() && util::contains(overridableOperators, _operation.getOperator()))
+				description += " No matching user-defined operator found.";
+
+			m_errorReporter.typeError(2271_error, _operation.location(), description);
+		}
 	}
 
 	_operation.annotation().isPure =

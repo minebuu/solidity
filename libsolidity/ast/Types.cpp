@@ -405,7 +405,12 @@ vector<UsingForDirective const*> usingForDirectivesForType(Type const& _type, AS
 
 }
 
-set<FunctionDefinition const*> Type::operatorDefinitions(Token _token, ASTNode const& _scope, bool _unary) const
+set<FunctionDefinition const*> Type::operatorDefinitions(
+	Token _token,
+	ASTNode const& _scope,
+	bool _unary,
+	bool _anyDataLocation
+) const
 {
 	if (!typeDefinition())
 		return {};
@@ -427,7 +432,7 @@ set<FunctionDefinition const*> Type::operatorDefinitions(Token _token, ASTNode c
 
 			size_t parameterCount = functionDefinition.parameterList().parameters().size();
 			if (
-				sameTypeOrPointerTo(*functionType->parameterTypes().front()) &&
+				sameTypeOrPointerTo(*functionType->parameterTypes().front(), _anyDataLocation) &&
 				(_unary ? parameterCount == 1 : parameterCount == 2)
 			)
 				matchingDefinitions.insert(&functionDefinition);
