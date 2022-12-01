@@ -1751,14 +1751,21 @@ bool TypeChecker::visit(UnaryOperation const& _operation)
 		_operation.annotation().type = operandType;
 
 		if (matchingDefinitions.size() >= 2)
+		{
+			SecondarySourceLocation secondaryLocation;
+			for (FunctionDefinition const* definition: matchingDefinitions)
+				secondaryLocation.append("Candidate definition:", definition->location());
+
 			m_errorReporter.typeError(
 				4705_error,
 				_operation.location(),
+				secondaryLocation,
 				fmt::format(
 					"User-defined unary operator {} has more than one definition matching the operand type visible in the current scope.",
 					TokenTraits::toString(op)
 				)
 			);
+		}
 		else
 			_operation.annotation().userDefinedFunction = *matchingDefinitions.begin();
 	}
@@ -1777,9 +1784,14 @@ bool TypeChecker::visit(UnaryOperation const& _operation)
 			solAssert(referenceType);
 			solAssert(!modifying);
 
+			SecondarySourceLocation secondaryLocation;
+			for (FunctionDefinition const* definition: definitionsWithDifferentLocation)
+				secondaryLocation.append("Candidate definition:", definition->location());
+
 			m_errorReporter.typeError(
 				5652_error,
 				_operation.location(),
+				secondaryLocation,
 				fmt::format(
 					"User-defined unary operator {} cannot be applied to type {}. "
 					"None of the available definitions accepts {} arguments.",
@@ -1844,10 +1856,15 @@ void TypeChecker::endVisit(BinaryOperation const& _operation)
 		commonType = builtinResult.get();
 	else if (!matchingDefinitions.empty())
 	{
+		SecondarySourceLocation secondaryLocation;
+		for (FunctionDefinition const* definition: matchingDefinitions)
+			secondaryLocation.append("Candidate definition:", definition->location());
+
 		if (matchingDefinitions.size() >= 2)
 			m_errorReporter.typeError(
 				5583_error,
 				_operation.location(),
+				secondaryLocation,
 				fmt::format(
 					"User-defined binary operator {} has more than one definition matching the operand types visible in the current scope.",
 					TokenTraits::toString(_operation.getOperator())
@@ -1891,9 +1908,14 @@ void TypeChecker::endVisit(BinaryOperation const& _operation)
 			auto const* referenceType = dynamic_cast<ReferenceType const*>(leftType);
 			solAssert(referenceType);
 
+			SecondarySourceLocation secondaryLocation;
+			for (FunctionDefinition const* definition: definitionsWithDifferentLocation)
+				secondaryLocation.append("Candidate definition:", definition->location());
+
 			m_errorReporter.typeError(
 				1349_error,
 				_operation.location(),
+				secondaryLocation,
 				fmt::format(
 					"User-defined binary operator {} cannot be applied to type {}. "
 					"None of the available definitions accepts {} arguments.",
@@ -4015,7 +4037,11 @@ void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 			if (wrongParametersMessage.has_value())
 				m_errorReporter.typeError(
 					1884_error,
-					path->location(),
+					functionDefinition.parameterList().location(),
+					SecondarySourceLocation().append(
+						"Function was used to implement an operator here:",
+						path->location()
+					),
 					fmt::format(
 						"Wrong parameters in operator definition. "
 						"The function \"{}\" needs to have {} to be used for the operator {}.",
@@ -4045,10 +4071,15 @@ void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 			else if (returnParameterCount != 1 || *returnParameterTypes.front() != *TypeProvider::boolean())
 				wrongReturnParametersMessage = "exactly one value of type bool";
 
+			solAssert(functionDefinition.returnParameterList());
 			if (wrongReturnParametersMessage.has_value())
 				m_errorReporter.typeError(
 					7743_error,
-					path->location(),
+					functionDefinition.returnParameterList()->location(),
+					SecondarySourceLocation().append(
+						"Function was used to implement an operator here:",
+						path->location()
+					),
 					fmt::format(
 						"Wrong return parameters in operator definition. "
 						"The function \"{}\" needs to return {} to be used for the operator {}.",
