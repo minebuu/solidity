@@ -3952,13 +3952,6 @@ void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 	Type const* usingForType = _usingFor.typeName()->annotation().type;
 	solAssert(usingForType);
 
-	if (usingForType->category() == Type::Category::Enum)
-		m_errorReporter.typeError(
-			9921_error,
-			_usingFor.location(),
-			"The \"using\" directive cannot be used to bind function to enum type as an operator."
-		);
-
 	Type const* normalizedType = TypeProvider::withLocationIfReference(
 		DataLocation::Storage,
 		usingForType
@@ -4006,7 +3999,7 @@ void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 		{
 			TypePointers const& parameterTypes = functionType->parameterTypesIncludingSelf();
 			size_t const parameterCount = parameterTypes.size();
-			if (!usingForType->typeDefinition())
+			if (!usingForType->typeDefinition() || usingForType->category() == Type::Category::Enum)
 			{
 				m_errorReporter.typeError(
 					5332_error,
