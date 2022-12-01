@@ -1743,6 +1743,7 @@ bool TypeChecker::visit(UnaryOperation const& _operation)
 	// Operator can't be both user-defined and built-in at the same time.
 	solAssert(!builtinResult || matchingDefinitions.empty());
 
+	FunctionDefinition const* operatorDefinition = nullptr;
 	if (builtinResult)
 		_operation.annotation().type = builtinResult;
 	else if (!matchingDefinitions.empty())
@@ -1767,7 +1768,7 @@ bool TypeChecker::visit(UnaryOperation const& _operation)
 			);
 		}
 		else
-			_operation.annotation().userDefinedFunction = *matchingDefinitions.begin();
+			operatorDefinition = *matchingDefinitions.begin();
 	}
 	else
 	{
@@ -1823,6 +1824,7 @@ bool TypeChecker::visit(UnaryOperation const& _operation)
 		_operation.annotation().type = operandType;
 	}
 
+	_operation.annotation().userDefinedFunction = operatorDefinition;
 	_operation.annotation().isConstant = false;
 	_operation.annotation().isPure =
 		!modifying &&
@@ -1852,6 +1854,7 @@ void TypeChecker::endVisit(BinaryOperation const& _operation)
 	solAssert(!builtinResult || matchingDefinitions.empty());
 
 	Type const* commonType = leftType;
+	FunctionDefinition const* operatorDefinition = nullptr;
 	if (builtinResult)
 		commonType = builtinResult.get();
 	else if (!matchingDefinitions.empty())
@@ -1871,28 +1874,7 @@ void TypeChecker::endVisit(BinaryOperation const& _operation)
 				)
 			);
 		else
-		{
-			_operation.annotation().userDefinedFunction = *matchingDefinitions.begin();
-			FunctionType const* userDefinedFunctionType = _operation.userDefinedFunctionType();
-
-			// operatorDefinitions() filters out definitions with non-matching first argument.
-			solAssert(leftType->sameTypeOrPointerTo(*userDefinedFunctionType->parameterTypes().at(0)));
-			solAssert(userDefinedFunctionType->parameterTypes().size() == 2);
-
-			if (!rightType->sameTypeOrPointerTo(*userDefinedFunctionType->parameterTypes().at(0)))
-				m_errorReporter.typeError(
-					5653_error,
-					_operation.location(),
-					fmt::format(
-						"The type of the second operand of this user-defined binary operator {} "
-						"does not match the type of the first operand, which is {}.",
-						string(TokenTraits::toString(_operation.getOperator())),
-						userDefinedFunctionType->parameterTypes().at(0)->humanReadableName()
-					)
-				);
-
-			commonType = userDefinedFunctionType->parameterTypes().at(0);
-		}
+			operatorDefinition = *matchingDefinitions.begin();
 	}
 	else
 	{
@@ -1942,10 +1924,34 @@ void TypeChecker::endVisit(BinaryOperation const& _operation)
 		}
 	}
 
+	_operation.annotation().userDefinedFunction = operatorDefinition;
+	FunctionType const* userDefinedFunctionType = _operation.userDefinedFunctionType();
+
+	if (operatorDefinition)
+	{
+		// operatorDefinitions() filters out definitions with non-matching first argument.
+		solAssert(leftType->sameTypeOrPointerTo(*userDefinedFunctionType->parameterTypes().at(0)));
+		solAssert(userDefinedFunctionType->parameterTypes().size() == 2);
+
+		if (!rightType->sameTypeOrPointerTo(*userDefinedFunctionType->parameterTypes().at(0)))
+			m_errorReporter.typeError(
+				5653_error,
+				_operation.location(),
+				fmt::format(
+					"The type of the second operand of this user-defined binary operator {} "
+					"does not match the type of the first operand, which is {}.",
+					string(TokenTraits::toString(_operation.getOperator())),
+					userDefinedFunctionType->parameterTypes().at(0)->humanReadableName()
+				)
+			);
+
+		commonType = userDefinedFunctionType->parameterTypes().at(0);
+	}
+
 	_operation.annotation().isPure =
 		*_operation.leftExpression().annotation().isPure &&
 		*_operation.rightExpression().annotation().isPure &&
-		(!_operation.userDefinedFunctionType() || _operation.userDefinedFunctionType()->isPure());
+		(!userDefinedFunctionType || userDefinedFunctionType->isPure());
 	_operation.annotation().commonType = commonType;
 	_operation.annotation().type =
 		TokenTraits::isCompareOp(_operation.getOperator()) ?

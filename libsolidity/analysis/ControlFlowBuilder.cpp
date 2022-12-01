@@ -65,7 +65,7 @@ bool ControlFlowBuilder::visit(BinaryOperation const& _operation)
 		case Token::And:
 		{
 			visitNode(_operation);
-			solAssert(!_operation.annotation().userDefinedFunction.set());
+			solAssert(*_operation.annotation().userDefinedFunction == nullptr);
 			appendControlFlow(_operation.leftExpression());
 
 			auto nodes = splitFlow<2>();
@@ -75,13 +75,12 @@ bool ControlFlowBuilder::visit(BinaryOperation const& _operation)
 		}
 		default:
 		{
-			if (_operation.annotation().userDefinedFunction.set())
+			if (*_operation.annotation().userDefinedFunction != nullptr)
 			{
 				visitNode(_operation);
 				_operation.leftExpression().accept(*this);
 				_operation.rightExpression().accept(*this);
 
-				solAssert(*_operation.annotation().userDefinedFunction);
 				m_currentNode->functionDefinition = *_operation.annotation().userDefinedFunction;
 
 				auto nextNode = newLabel();
@@ -100,11 +99,10 @@ bool ControlFlowBuilder::visit(UnaryOperation const& _operation)
 {
 	solAssert(!!m_currentNode);
 
-	if (_operation.annotation().userDefinedFunction.set())
+	if (*_operation.annotation().userDefinedFunction != nullptr)
 	{
 		visitNode(_operation);
 		_operation.subExpression().accept(*this);
-		solAssert(*_operation.annotation().userDefinedFunction);
 		m_currentNode->functionDefinition = *_operation.annotation().userDefinedFunction;
 
 		auto nextNode = newLabel();

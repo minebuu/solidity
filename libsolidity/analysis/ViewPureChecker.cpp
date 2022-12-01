@@ -333,20 +333,14 @@ void ViewPureChecker::reportFunctionCallMutability(StateMutability _mutability, 
 
 void ViewPureChecker::endVisit(BinaryOperation const& _binaryOperation)
 {
-	if (_binaryOperation.annotation().userDefinedFunction.set())
-	{
-		solAssert(*_binaryOperation.annotation().userDefinedFunction);
+	if (*_binaryOperation.annotation().userDefinedFunction != nullptr)
 		reportFunctionCallMutability((*_binaryOperation.annotation().userDefinedFunction)->stateMutability(), _binaryOperation.location());
-	}
 }
 
 void ViewPureChecker::endVisit(UnaryOperation const& _unaryOperation)
 {
-	if (_unaryOperation.annotation().userDefinedFunction.set())
-	{
-		solAssert((*_unaryOperation.annotation().userDefinedFunction));
+	if (*_unaryOperation.annotation().userDefinedFunction != nullptr)
 		reportFunctionCallMutability((*_unaryOperation.annotation().userDefinedFunction)->stateMutability(), _unaryOperation.location());
-	}
 }
 
 void ViewPureChecker::endVisit(FunctionCall const& _functionCall)
