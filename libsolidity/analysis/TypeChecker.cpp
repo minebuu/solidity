@@ -3920,6 +3920,7 @@ void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 				continue;
 			}
 
+			optional<string> wrongParametersMessage;
 			if (
 				(
 					(TokenTraits::isBinaryOp(*operator_) && !TokenTraits::isUnaryOp(*operator_)) ||
@@ -3931,17 +3932,7 @@ void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 					*parameterTypes.at(1)
 				)
 			)
-				m_errorReporter.typeError(
-					1884_error,
-					path->location(),
-					fmt::format(
-						"The function \"{}\" needs to have two parameters of type {} and the same "
-						"data location to be used for the operator {}.",
-						joinHumanReadable(path->path(), "."),
-						usingForType->canonicalName(),
-						TokenTraits::friendlyName(*operator_)
-					)
-				);
+				wrongParametersMessage = fmt::format("two parameters of type {} and the same data location", usingForType->canonicalName());
 			else if (
 				!TokenTraits::isBinaryOp(*operator_) &&
 				TokenTraits::isUnaryOp(*operator_) &&
@@ -3953,16 +3944,7 @@ void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 					)
 				)
 			)
-				m_errorReporter.typeError(
-					1147_error,
-					path->location(),
-					fmt::format(
-					"The function \"{}\" needs to have exactly one parameter of type {} to be used for the operator {}.",
-						joinHumanReadable(path->path(), "."),
-						usingForType->canonicalName(),
-						TokenTraits::friendlyName(*operator_)
-					)
-				);
+				wrongParametersMessage = fmt::format("exactly one parameter of type {}", usingForType->canonicalName());
 			else if (
 				(
 					parameterCount == 2 &&
@@ -3983,14 +3965,17 @@ void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 				) ||
 				parameterCount >= 3
 			)
+				wrongParametersMessage = fmt::format("one or two parameters of type {} and the same data location", usingForType->canonicalName());
+
+			if (wrongParametersMessage.has_value())
 				m_errorReporter.typeError(
-					7617_error,
+					1884_error,
 					path->location(),
 					fmt::format(
-						"The function \"{}\" needs to have one or two parameters of type {} "
-						"and the same data location to be used for the operator {}.",
+						"Wrong parameters in operator definition. "
+						"The function \"{}\" needs to have {} to be used for the operator {}.",
 						joinHumanReadable(path->path(), "."),
-						usingForType->canonicalName(),
+						wrongParametersMessage.value(),
 						TokenTraits::friendlyName(*operator_)
 					)
 				);
@@ -4000,6 +3985,8 @@ void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 
 			TypePointers const& returnParameterTypes = functionType->returnParameterTypes();
 			size_t const returnParameterCount = returnParameterTypes.size();
+
+			optional<string> wrongReturnParametersMessage;
 			if (!TokenTraits::isCompareOp(*operator_))
 			{
 				if (
@@ -4009,35 +3996,22 @@ void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 						*TypeProvider::withLocationIfReference(DataLocation::Storage, usingForType)
 					)
 				)
-					m_errorReporter.typeError(
-						7743_error,
-						path->location(),
-						fmt::format(
-							"The function \"{}\" needs to return exactly one value of type {} to be used for the operator {}.",
-							joinHumanReadable(path->path(), "."),
-							usingForType->canonicalName(),
-							TokenTraits::friendlyName(*operator_)
-						)
-					);
+					wrongReturnParametersMessage = "exactly one value of type " + usingForType->canonicalName();
 				else if (*returnParameterTypes.front() != *parameterTypes.front())
-					m_errorReporter.typeError(
-						3605_error,
-						path->location(),
-						fmt::format(
-							"The function \"{}\" needs to have parameters and return value "
-							"of the same type to be used for the operator {}.",
-							joinHumanReadable(path->path(), "."),
-							TokenTraits::friendlyName(*operator_)
-						)
-					);
+					wrongReturnParametersMessage = "a value of the same type and data location as its parameters";
 			}
 			else if (returnParameterCount != 1 || *returnParameterTypes.front() != *TypeProvider::boolean())
+				wrongReturnParametersMessage = "exactly one value of type bool";
+
+			if (wrongReturnParametersMessage.has_value())
 				m_errorReporter.typeError(
-					7995_error,
+					7743_error,
 					path->location(),
 					fmt::format(
-						"The function \"{}\" needs to return exactly one value of type bool to be used for the operator {}.",
+						"Wrong return parameters in operator definition. "
+						"The function \"{}\" needs to return {} to be used for the operator {}.",
 						joinHumanReadable(path->path(), "."),
+						wrongReturnParametersMessage.value(),
 						TokenTraits::friendlyName(*operator_)
 					)
 				);
