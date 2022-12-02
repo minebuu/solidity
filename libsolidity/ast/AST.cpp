@@ -909,11 +909,10 @@ OperationAnnotation& UnaryOperation::annotation() const
 
 FunctionType const* UnaryOperation::userDefinedFunctionType() const
 {
-	if (!annotation().userDefinedFunction.set())
+	if (*annotation().userDefinedFunction == nullptr)
 		return nullptr;
 
 	FunctionDefinition const* userDefinedFunction = *annotation().userDefinedFunction;
-	solAssert(userDefinedFunction);
 	return dynamic_cast<FunctionType const*>(
 		userDefinedFunction->libraryFunction() ?
 		userDefinedFunction->typeViaContractName() :
@@ -923,11 +922,10 @@ FunctionType const* UnaryOperation::userDefinedFunctionType() const
 
 FunctionType const* BinaryOperation::userDefinedFunctionType() const
 {
-	if (!annotation().userDefinedFunction.set())
+	if (*annotation().userDefinedFunction == nullptr)
 		return nullptr;
 
 	FunctionDefinition const* userDefinedFunction = *annotation().userDefinedFunction;
-	solAssert(userDefinedFunction);
 	return dynamic_cast<FunctionType const*>(
 		userDefinedFunction->libraryFunction() ?
 		userDefinedFunction->typeViaContractName() :
