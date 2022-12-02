@@ -466,8 +466,8 @@ MemberList::MemberMap Type::attachedFunctions(Type const& _type, ASTNode const& 
 		for (auto const& [identifierPath, operator_]: ufd->functionsAndOperators())
 		{
 			if (operator_.has_value())
-				// Functions used to define operators are not attached to the type.
-				// I.e. `using {f} for T` allows `T x; x.f()` but `using {f as +} for T` does not.
+				// Functions used to define operators are not automatically attached to the type.
+				// I.e. `using {f, f as +} for T` allows `T x; x.f()` but `using {f as +} for T` does not.
 				continue;
 
 			solAssert(identifierPath);

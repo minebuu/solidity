@@ -386,7 +386,7 @@ public:
 	/// Clears all internally cached values (if any).
 	virtual void clearCache() const;
 
-	/// Scans all "using for" directives in the @a _scope for function definitions bound to
+	/// Scans all "using for" directives in the @a _scope for functions implementing
 	/// the operator represented by @a _token. Returns the set of all definitions where the type
 	/// of the first argument matches this type object. Accepts both pointer and non-pointer types.
 	///

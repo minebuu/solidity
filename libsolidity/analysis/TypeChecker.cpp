@@ -4050,7 +4050,7 @@ void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 					)
 				);
 
-			// This case is separately validated for all bound functions and is a fatal error
+			// This case is separately validated for all attached functions and is a fatal error
 			solAssert(parameterCount != 0);
 
 			TypePointers const& returnParameterTypes = functionType->returnParameterTypes();
