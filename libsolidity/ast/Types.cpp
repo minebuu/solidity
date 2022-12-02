@@ -25,7 +25,6 @@
 
 #include <libsolidity/ast/AST.h>
 #include <libsolidity/ast/TypeProvider.h>
-#include <libsolidity/ast/OverridableOperators.h>
 
 #include <libsolidity/analysis/ConstantEvaluator.h>
 
@@ -406,10 +405,10 @@ vector<UsingForDirective const*> usingForDirectivesForType(Type const& _type, AS
 
 }
 
-Result<FunctionDefinition const*> Type::operatorDefinition(Token _token, ASTNode const& _scope, bool _unary) const
+set<FunctionDefinition const*> Type::operatorDefinitions(Token _token, ASTNode const& _scope, bool _unary) const
 {
-	if (!typeDefinition() || !util::contains(overridableOperators, _token))
-		return nullptr;
+	if (!typeDefinition())
+		return {};
 
 	set<FunctionDefinition const*> matchingDefinitions;
 	for (UsingForDirective const* directive: usingForDirectivesForType(*this, _scope))
@@ -434,12 +433,7 @@ Result<FunctionDefinition const*> Type::operatorDefinition(Token _token, ASTNode
 				matchingDefinitions.insert(&functionDefinition);
 		}
 
-	if (matchingDefinitions.size() == 1)
-		return *matchingDefinitions.begin();
-	else if (matchingDefinitions.size() == 0)
-		return Result<FunctionDefinition const*>::err("No matching user-defined operator found.");
-	else
-		return Result<FunctionDefinition const*>::err("Multiple user-defined functions provided for this operator.");
+	return matchingDefinitions;
 }
 
 MemberList::MemberMap Type::attachedFunctions(Type const& _type, ASTNode const& _scope)

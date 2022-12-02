@@ -24,6 +24,7 @@
 #include <libsolidity/analysis/TypeChecker.h>
 #include <libsolidity/ast/AST.h>
 #include <libsolidity/ast/ASTUtils.h>
+#include <libsolidity/ast/OverridableOperators.h>
 #include <libsolidity/ast/TypeProvider.h>
 
 #include <libyul/AsmAnalysis.h>
@@ -1733,30 +1734,45 @@ bool TypeChecker::visit(UnaryOperation const& _operation)
 
 	// Check if the operator is built-in or user-defined.
 	TypeResult builtinResult = operandType->unaryOperatorResult(op);
-	Result<FunctionDefinition const*> userDefinedOperatorResult = operandType->operatorDefinition(
+	set<FunctionDefinition const*> matchingDefinitions = operandType->operatorDefinitions(
 		_operation.getOperator(),
 		*currentDefinitionScope(),
 		true // _unary
 	);
 
-	if (userDefinedOperatorResult)
-		_operation.annotation().userDefinedFunction = userDefinedOperatorResult;
 	// Operator can't be both user-defined and built-in at the same time.
-	solAssert(!builtinResult || !userDefinedOperatorResult);
+	solAssert(!builtinResult || matchingDefinitions.empty());
 
-	if (userDefinedOperatorResult)
-		_operation.annotation().type = operandType;
-	else if (builtinResult)
+	if (builtinResult)
 		_operation.annotation().type = builtinResult;
+	else if (!matchingDefinitions.empty())
+	{
+		// ASSUMPTION: Argument type of a user-defined unary operator always matches the return type.
+		_operation.annotation().type = operandType;
+
+		if (matchingDefinitions.size() >= 2)
+			m_errorReporter.typeError(
+				4705_error,
+				_operation.location(),
+				fmt::format(
+					"User-defined unary operator {} has more than one definition matching the operand type visible in the current scope.",
+					TokenTraits::toString(op)
+				)
+			);
+		else
+			_operation.annotation().userDefinedFunction = *matchingDefinitions.begin();
+	}
 	else
 	{
 		string description = fmt::format(
-			"Built-in unary operator {} cannot be applied to type {}.{}{}",
+			"Built-in unary operator {} cannot be applied to type {}.",
 			TokenTraits::toString(op),
-			operandType->humanReadableName(),
-			!builtinResult.message().empty() ? " " + builtinResult.message() : "",
-			!userDefinedOperatorResult.message().empty() ? " " + userDefinedOperatorResult.message() : ""
+			operandType->humanReadableName()
 		);
+		if (!builtinResult.message().empty())
+			description += " " + builtinResult.message();
+		if (operandType->typeDefinition() && util::contains(overridableOperators, op))
+			description += " No matching user-defined operator found.";
 
 		if (modifying)
 			// Cannot just report the error, ignore the unary operator, and continue,
@@ -1786,58 +1802,73 @@ void TypeChecker::endVisit(BinaryOperation const& _operation)
 
 	// Check if the operator is built-in or user-defined.
 	TypeResult builtinResult = leftType->binaryOperatorResult(_operation.getOperator(), rightType);
-	Result<FunctionDefinition const*> operatorDefinitionResult = leftType->operatorDefinition(
+	set<FunctionDefinition const*> matchingDefinitions = leftType->operatorDefinitions(
 		_operation.getOperator(),
 		*currentDefinitionScope(),
 		false // _unary
 	);
-	if (operatorDefinitionResult)
-		_operation.annotation().userDefinedFunction = operatorDefinitionResult;
-	FunctionType const* userDefinedFunctionType = _operation.userDefinedFunctionType();
-	_operation.annotation().isPure =
-		*_operation.leftExpression().annotation().isPure &&
-		*_operation.rightExpression().annotation().isPure &&
-		(!userDefinedFunctionType || userDefinedFunctionType->isPure());
 
 	// Operator can't be both user-defined and built-in at the same time.
-	solAssert(!builtinResult || !operatorDefinitionResult);
+	solAssert(!builtinResult || matchingDefinitions.empty());
 
 	Type const* commonType = leftType;
 	if (builtinResult)
 		commonType = builtinResult.get();
-	else if (operatorDefinitionResult)
+	else if (!matchingDefinitions.empty())
 	{
-		// operatorDefinitions() filters out definitions with non-matching first argument.
-		solAssert(leftType->sameTypeOrPointerTo(*userDefinedFunctionType->parameterTypes().at(0)));
-		solAssert(userDefinedFunctionType->parameterTypes().size() == 2);
-		if (!rightType->sameTypeOrPointerTo(*userDefinedFunctionType->parameterTypes().at(0)))
+		if (matchingDefinitions.size() >= 2)
 			m_errorReporter.typeError(
-				5653_error,
+				5583_error,
 				_operation.location(),
 				fmt::format(
-					"The type of the second operand of this user-defined binary operator {} "
-					"does not match the type of the first operand, which is {}.",
-					string(TokenTraits::toString(_operation.getOperator())),
-					userDefinedFunctionType->parameterTypes().at(0)->humanReadableName()
+					"User-defined binary operator {} has more than one definition matching the operand types visible in the current scope.",
+					TokenTraits::toString(_operation.getOperator())
 				)
 			);
+		else
+		{
+			_operation.annotation().userDefinedFunction = *matchingDefinitions.begin();
+			FunctionType const* userDefinedFunctionType = _operation.userDefinedFunctionType();
 
-		commonType = userDefinedFunctionType->parameterTypes().at(0);
+			// operatorDefinitions() filters out definitions with non-matching first argument.
+			solAssert(leftType->sameTypeOrPointerTo(*userDefinedFunctionType->parameterTypes().at(0)));
+			solAssert(userDefinedFunctionType->parameterTypes().size() == 2);
+
+			if (!rightType->sameTypeOrPointerTo(*userDefinedFunctionType->parameterTypes().at(0)))
+				m_errorReporter.typeError(
+					5653_error,
+					_operation.location(),
+					fmt::format(
+						"The type of the second operand of this user-defined binary operator {} "
+						"does not match the type of the first operand, which is {}.",
+						string(TokenTraits::toString(_operation.getOperator())),
+						userDefinedFunctionType->parameterTypes().at(0)->humanReadableName()
+					)
+				);
+
+			commonType = userDefinedFunctionType->parameterTypes().at(0);
+		}
 	}
 	else
-		m_errorReporter.typeError(
-			2271_error,
-			_operation.location(),
-			fmt::format(
-				"Built-in binary operator {} cannot be applied to types {} and {}.{}{}",
-				string(TokenTraits::toString(_operation.getOperator())),
-				leftType->humanReadableName(),
-				rightType->humanReadableName(),
-				(!builtinResult.message().empty() ? " " + builtinResult.message() : ""),
-				(!operatorDefinitionResult.message().empty() ? " " + operatorDefinitionResult.message() : "")
-			)
+	{
+		string description = fmt::format(
+			"Built-in binary operator {} cannot be applied to types {} and {}.",
+			string(TokenTraits::toString(_operation.getOperator())),
+			leftType->humanReadableName(),
+			rightType->humanReadableName()
 		);
+		if (!builtinResult.message().empty())
+			description += " " + builtinResult.message();
+		if (leftType->typeDefinition() && util::contains(overridableOperators, _operation.getOperator()))
+			description += " No matching user-defined operator found.";
 
+		m_errorReporter.typeError(2271_error, _operation.location(), description);
+	}
+
+	_operation.annotation().isPure =
+		*_operation.leftExpression().annotation().isPure &&
+		*_operation.rightExpression().annotation().isPure &&
+		(!_operation.userDefinedFunctionType() || _operation.userDefinedFunctionType()->isPure());
 	_operation.annotation().commonType = commonType;
 	_operation.annotation().type =
 		TokenTraits::isCompareOp(_operation.getOperator()) ?
