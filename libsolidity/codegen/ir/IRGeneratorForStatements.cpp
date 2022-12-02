@@ -673,13 +673,12 @@ bool IRGeneratorForStatements::visit(UnaryOperation const& _unaryOperation)
 {
 	setLocation(_unaryOperation);
 
-	if (_unaryOperation.annotation().userDefinedFunction.set())
+	FunctionDefinition const* function = *_unaryOperation.annotation().userDefinedFunction;
+	if (function)
 	{
 		_unaryOperation.subExpression().accept(*this);
 		setLocation(_unaryOperation);
 
-		FunctionDefinition const* function = *_unaryOperation.annotation().userDefinedFunction;
-		solAssert(function);
 		solAssert(function->isFree() || function->libraryFunction());
 
 		FunctionType const* functionType = _unaryOperation.userDefinedFunctionType();
@@ -811,14 +810,13 @@ bool IRGeneratorForStatements::visit(BinaryOperation const& _binOp)
 {
 	setLocation(_binOp);
 
-	if (_binOp.annotation().userDefinedFunction.set())
+	FunctionDefinition const* function = *_binOp.annotation().userDefinedFunction;
+	if (function)
 	{
 		_binOp.leftExpression().accept(*this);
 		_binOp.rightExpression().accept(*this);
 		setLocation(_binOp);
 
-		FunctionDefinition const* function = *_binOp.annotation().userDefinedFunction;
-		solAssert(function);
 		solAssert(function->isFree() || function->libraryFunction());
 
 		FunctionType const* functionType = _binOp.userDefinedFunctionType();
