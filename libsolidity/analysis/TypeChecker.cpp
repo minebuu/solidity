@@ -24,7 +24,7 @@
 #include <libsolidity/analysis/TypeChecker.h>
 #include <libsolidity/ast/AST.h>
 #include <libsolidity/ast/ASTUtils.h>
-#include <libsolidity/ast/OverridableOperators.h>
+#include <libsolidity/ast/UserDefinableOperators.h>
 #include <libsolidity/ast/TypeProvider.h>
 
 #include <libyul/AsmAnalysis.h>
@@ -1811,7 +1811,7 @@ bool TypeChecker::visit(UnaryOperation const& _operation)
 			);
 			if (!builtinResult.message().empty())
 				description += " " + builtinResult.message();
-			if (operandType->typeDefinition() && util::contains(overridableOperators, op))
+			if (operandType->typeDefinition() && util::contains(userDefinableOperators, op))
 				description += " No matching user-defined operator found.";
 
 			if (modifying)
@@ -1917,7 +1917,7 @@ void TypeChecker::endVisit(BinaryOperation const& _operation)
 			);
 			if (!builtinResult.message().empty())
 				description += " " + builtinResult.message();
-			if (leftType->typeDefinition() && util::contains(overridableOperators, _operation.getOperator()))
+			if (leftType->typeDefinition() && util::contains(userDefinableOperators, _operation.getOperator()))
 				description += " No matching user-defined operator found.";
 
 			m_errorReporter.typeError(2271_error, _operation.location(), description);
