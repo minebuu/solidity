@@ -696,7 +696,7 @@ bool IRGeneratorForStatements::visit(UnaryOperation const& _unaryOperation)
 
 		solAssert(function->returnParameters().size() == 1);
 		solAssert(
-			_unaryOperation.annotation().type->sameTypeOrPointerTo(*function->returnParameters().at(0)->type()),
+			*_unaryOperation.annotation().type == *function->returnParameters().at(0)->type(),
 			"The return type of the operator definition is supposed to match the type of the expression."
 		);
 
@@ -836,7 +836,7 @@ bool IRGeneratorForStatements::visit(BinaryOperation const& _binOp)
 
 		solAssert(function->returnParameters().size() == 1);
 		solAssert(
-			_binOp.annotation().type->sameTypeOrPointerTo(*function->returnParameters().at(0)->type()),
+			*_binOp.annotation().type == *function->returnParameters().at(0)->type(),
 			"The return type of the operator definition is supposed to match the type of the expression."
 		);
 
