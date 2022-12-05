@@ -1743,14 +1743,15 @@ bool TypeChecker::visit(UnaryOperation const& _operation)
 	// Operator can't be both user-defined and built-in at the same time.
 	solAssert(!builtinResult || matchingDefinitions.empty());
 
+	// By default use the type we'd expect from correct code. This way we can continue analysis
+	// of other expressions in a sensible way in case of a non-fatal error.
+	Type const* resultType = operandType;
+
 	FunctionDefinition const* operatorDefinition = nullptr;
 	if (builtinResult)
-		_operation.annotation().type = builtinResult;
+		resultType = builtinResult;
 	else if (!matchingDefinitions.empty())
 	{
-		// ASSUMPTION: Argument type of a user-defined unary operator always matches the return type.
-		_operation.annotation().type = operandType;
-
 		if (matchingDefinitions.size() >= 2)
 		{
 			SecondarySourceLocation secondaryLocation;
@@ -1821,10 +1822,16 @@ bool TypeChecker::visit(UnaryOperation const& _operation)
 			else
 				m_errorReporter.typeError(4907_error, _operation.location(), description);
 		}
-		_operation.annotation().type = operandType;
 	}
 
 	_operation.annotation().userDefinedFunction = operatorDefinition;
+
+	TypePointers const& returnParameterTypes = _operation.userDefinedFunctionType()->returnParameterTypes();
+	if (operatorDefinition && returnParameterTypes.size() >= 1)
+		// NOTE: Usually this will match operand type but in rare cases they may differ.
+		// E.g. an operation on storage refs will actually return a storage ptr.
+		resultType = _operation.userDefinedFunctionType()->returnParameterTypes()[0];
+	_operation.annotation().type = resultType;
 	_operation.annotation().isConstant = false;
 	_operation.annotation().isPure =
 		!modifying &&
@@ -1853,7 +1860,10 @@ void TypeChecker::endVisit(BinaryOperation const& _operation)
 	// Operator can't be both user-defined and built-in at the same time.
 	solAssert(!builtinResult || matchingDefinitions.empty());
 
+	// By default use the type we'd expect from correct code. This way we can continue analysis
+	// of other expressions in a sensible way in case of a non-fatal error.
 	Type const* commonType = leftType;
+
 	FunctionDefinition const* operatorDefinition = nullptr;
 	if (builtinResult)
 		commonType = builtinResult.get();
@@ -1945,7 +1955,11 @@ void TypeChecker::endVisit(BinaryOperation const& _operation)
 				)
 			);
 
-		commonType = userDefinedFunctionType->parameterTypes().at(0);
+		TypePointers const& returnParameterTypes = _operation.userDefinedFunctionType()->returnParameterTypes();
+		if (returnParameterTypes.size() >= 1)
+			// NOTE: Usually this will match operand types but in rare cases they may differ.
+			// E.g. an operation on storage refs will actually return a storage ptr.
+				commonType = returnParameterTypes[0];
 	}
 
 	_operation.annotation().isPure =
