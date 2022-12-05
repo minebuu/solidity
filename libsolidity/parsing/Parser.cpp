@@ -990,8 +990,8 @@ ASTPointer<UsingForDirective> Parser::parseUsingDirective()
 					parserError(
 						4403_error,
 						fmt::format(
-							"Operator {}is not user-definable. This is only allowed for the following operators: {}",
-							(TokenTraits::toString(operator_) ? string(TokenTraits::toString(operator_)) + " " : ""),
+							"Not a user-definable operator: {}. Only the following operators can be user-defined: {}",
+							(!m_scanner->currentLiteral().empty() ? m_scanner->currentLiteral() : string(TokenTraits::toString(operator_))),
 							util::joinHumanReadable(userDefinableOperators | ranges::views::transform([](Token _t) { return string{TokenTraits::toString(_t)}; }))
 						)
 					);
