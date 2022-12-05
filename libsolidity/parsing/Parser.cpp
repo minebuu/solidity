@@ -989,11 +989,11 @@ ASTPointer<UsingForDirective> Parser::parseUsingDirective()
 				{
 					parserError(
 						4403_error,
-						(
-							"Operator " + (TokenTraits::toString(operator_) ? string(TokenTraits::toString(operator_)) + " " : "")
-							+ "is not user-definable. This is only allowed for the following operators: "
-						) +
-						util::joinHumanReadable(userDefinableOperators | ranges::views::transform([](Token _t) { return string{TokenTraits::toString(_t)}; }))
+						fmt::format(
+							"Operator {}is not user-definable. This is only allowed for the following operators: {}",
+							(TokenTraits::toString(operator_) ? string(TokenTraits::toString(operator_)) + " " : ""),
+							util::joinHumanReadable(userDefinableOperators | ranges::views::transform([](Token _t) { return string{TokenTraits::toString(_t)}; }))
+						)
 					);
 				}
 				operators.emplace_back(operator_);
