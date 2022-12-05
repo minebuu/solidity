@@ -1,12 +1,7 @@
 type Int is int128;
 
-function add(Int, Int) pure returns (Int) {
-    return Int.wrap(3);
-}
-
-function another_add(Int, Int) pure returns (Int) {
-    return Int.wrap(7);
-}
+function add(Int, Int) pure returns (Int) {}
+function another_add(Int, Int) pure returns (Int) {}
 
 contract B {
     using {add as +} for Int;
@@ -29,6 +24,5 @@ contract D is B {
         return Int.wrap(0) + Int.wrap(0);
     }
 }
-
 // ----
-// TypeError 2271: (542-567): Built-in binary operator + cannot be applied to types Int and Int. No matching user-defined operator found.
+// TypeError 2271: (491-516): Built-in binary operator + cannot be applied to types Int and Int. No matching user-defined operator found.

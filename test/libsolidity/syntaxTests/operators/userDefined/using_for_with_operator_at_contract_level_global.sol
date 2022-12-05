@@ -1,8 +1,6 @@
 type Int is int16;
 
-function add(Int, Int) pure returns (Int) {
-    return Int.wrap(0);
-}
+function add(Int, Int) pure returns (Int) {}
 
 contract C {
     using {add as +} for Int global;
@@ -13,4 +11,4 @@ contract C {
 }
 
 // ----
-// SyntaxError 3367: (108-140): "global" can only be used at file level.
+// SyntaxError 3367: (83-115): "global" can only be used at file level.
