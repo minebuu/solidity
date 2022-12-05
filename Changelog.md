@@ -8,7 +8,6 @@ Compiler Features:
  * Commandline Interface: Return exit code ``2`` on uncaught exceptions.
  * Commandline Interface: Add `--no-cbor-metadata` that skips CBOR metadata from getting appended at the end of the bytecode.
  * EVM: Basic support for the EVM version "Paris".
- * JSON AST: Add ``function`` field to ``UnaryOperation`` and ``BinaryOperation`` AST nodes and ``functionList.operator`` field to ``UsingForDirective`` AST nodes.
  * Natspec: Add event Natspec inheritance for devdoc.
  * Standard JSON: Add a boolean field `settings.metadata.appendCBOR` that skips CBOR metadata from getting appended at the end of the bytecode.
  * Yul EVM Code Transform: Generate more optimal code for user-defined functions that always terminate a transaction. No return labels will be pushed for calls to functions that always terminate.
@@ -30,6 +29,10 @@ Bugfixes:
  * SMTChecker: Fix internal error on chain assignments using static fully specified state variables.
  * SMTChecker: Fix internal error when using user defined types as mapping indices or struct members.
  * SMTChecker: Fix internal error when deleting struct member of function type.
+
+
+AST Changes:
+ * AST: Add ``function`` field to ``UnaryOperation`` and ``BinaryOperation`` AST nodes and ``functionList.operator`` field to ``UsingForDirective`` AST nodes.
 
 
 ### 0.8.17 (2022-09-08)
