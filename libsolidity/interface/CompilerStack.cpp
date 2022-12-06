@@ -415,7 +415,7 @@ void CompilerStack::importASTs(map<string, Json::Value> const& _sources)
 		source.charStream = make_shared<CharStream>(
 			util::jsonCompactPrint(m_sourceJsons[src.first]),
 			src.first,
-			true // imported from AST
+			CharStream::SourceType::SolidityAST // imported from AST
 		);
 		m_sources[path] = std::move(source);
 	}
@@ -434,7 +434,7 @@ void CompilerStack::importEvmAssembly(std::string const& _filename, Json::Value 
 	source.charStream = make_shared<CharStream>(
 		util::jsonCompactPrint(m_sourceJsons[_filename]),
 		_filename,
-		true // imported from AST
+		CharStream::SourceType::EvmAssemblyJson // imported from Evm Assembly Json
 	);
 	m_assemblyStack = std::make_unique<evmasm::AssemblyStack>(_filename, _json);
 	m_stackState = ParsedAndImported;

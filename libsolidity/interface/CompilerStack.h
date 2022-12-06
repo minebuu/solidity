@@ -123,7 +123,7 @@ public:
 		Solidity,
 		/// Compilation from an imported Solidity AST.
 		SolidityAST,
-		/// Compilation from an imported EVM Assembly JSON
+		/// Compilation from an imported EVM Assembly JSON.
 		EvmAssemblyJson
 	};
 
