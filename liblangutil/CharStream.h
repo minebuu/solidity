@@ -70,18 +70,26 @@ struct LineColumn;
 class CharStream
 {
 public:
+	enum class SourceType {
+		/// Regular Solidity source files.
+		Solidity,
+		/// Imported Solidity AST.
+		SolidityAST,
+		/// Imported EVM Assembly JSON.
+		EvmAssemblyJson
+	};
 	CharStream() = default;
 	CharStream(std::string _source, std::string _name):
 		m_source(std::move(_source)), m_name(std::move(_name)) {}
-	CharStream(std::string _source, std::string _name, bool _importedFromAST):
+	CharStream(std::string _source, std::string _name, SourceType _importedFromAST):
 		m_source(std::move(_source)),
 		m_name(std::move(_name)),
-		m_importedFromAST(_importedFromAST)
+		m_sourceType(_importedFromAST)
 	{ }
 
 	size_t position() const { return m_position; }
 	bool isPastEndOfInput(size_t _charsForward = 0) const { return (m_position + _charsForward) >= m_source.size(); }
-	bool isImportedFromAST() const { return m_importedFromAST; }
+	bool isImportedFromAST() const { return m_sourceType == SourceType::SolidityAST; }
 
 	char get(size_t _charsForward = 0) const { return m_source[m_position + _charsForward]; }
 	char advanceAndGet(size_t _chars = 1);
@@ -144,7 +152,7 @@ public:
 private:
 	std::string m_source;
 	std::string m_name;
-	bool m_importedFromAST{false};
+	SourceType m_sourceType{SourceType::Solidity};
 	size_t m_position{0};
 };
 
